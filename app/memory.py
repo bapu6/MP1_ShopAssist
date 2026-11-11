@@ -26,16 +26,13 @@ SUMMARY_PROMPT = ("Summarise this store conversation in at most 5 short bullet p
 
 
 def summarise(history: list, llm, keep_turns: int = KEEP_TURNS) -> list:
-    """STRETCH MP1-T4s: older turns become ONE summary message; the last keep_turns turns stay word for word.
-
-    If history is short (at most 2 * keep_turns messages), return it unchanged. Otherwise:
-        old, recent = history[:-2 * keep_turns], history[-2 * keep_turns:]
-        transcript = "\\n".join(f"{type(m).__name__}: {m.content}" for m in old)
-        summary = llm.invoke([SystemMessage(SUMMARY_PROMPT), HumanMessage(transcript)]).content
-        return [SystemMessage(f"Summary of the earlier conversation:\\n{summary}")] + recent
-    Cost note for your report: this makes one EXTRA model call on every long turn. Could you avoid that?
-    """
-    raise NotImplementedError("stretch MP1-T4s")
+    """Older turns become ONE summary message; the last keep_turns turns stay word for word."""
+    if len(history) <= 2 * keep_turns:
+        return list(history)
+    old, recent = history[:-2 * keep_turns], history[-2 * keep_turns:]
+    transcript = "\n".join(f"{type(m).__name__}: {m.content}" for m in old)
+    summary = llm.invoke([SystemMessage(SUMMARY_PROMPT), HumanMessage(transcript)]).content
+    return [SystemMessage(f"Summary of the earlier conversation:\n{summary}")] + recent
 
 
 def trim(history: list, llm=None) -> list:
