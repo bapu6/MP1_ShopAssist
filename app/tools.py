@@ -27,10 +27,9 @@ METRO_PREFIXES = {"11", "40", "50", "56", "60", "70"}    # Delhi, Mumbai, Hydera
 
 
 def _find(order_id: str) -> dict:
-    """Look an order up. GIVEN. Raises ValueError for an order that doesn't exist."""
-    # TODO MP1-T2: validate the FORMAT first. If order_id doesn't match ORDER_ID (like ORD-12345), raise
-    #   ValueError(f"order_id must look like ORD-12345, got {order_id!r}")
-    # so the model asks the customer to check the number, instead of the tool saying "not found".
+    """Look an order up. Raises ValueError for bad format or non-existent order."""
+    if not ORDER_ID.match(order_id):
+        raise ValueError(f"order_id must look like ORD-12345, got {order_id!r}")
     if order_id not in ORDERS:
         raise ValueError(f"no order {order_id} - ask the customer to check the order number")
     return ORDERS[order_id]
@@ -58,9 +57,10 @@ def get_delivery_estimate(pincode: str, speed: str = "standard") -> dict:
         pincode: the 6-digit Indian postal code, e.g. 500081
         speed: "standard" or "express"
     """
-    # TODO MP1-T2: validate before answering. Raise ValueError if:
-    #   pincode is not exactly 6 digits                      e.g. "50008", "5000811", "abc123"
-    #   speed is not "standard" or "express"
+    if not (len(pincode) == 6 and pincode.isdigit()):
+        raise ValueError(f"pincode must be exactly 6 digits, got {pincode!r}")
+    if speed not in ("standard", "express"):
+        raise ValueError(f"speed must be 'standard' or 'express', got {speed!r}")
     metro = pincode[:2] in METRO_PREFIXES
     if speed == "express":
         return {"pincode": pincode, "speed": "express", "days": "next day" if metro else "2-3 working days",
@@ -71,24 +71,32 @@ def get_delivery_estimate(pincode: str, speed: str = "standard") -> dict:
 
 @tool(parse_docstring=True)
 def check_return_eligibility(order_id: str, reason: str) -> dict:
-    """TODO MP1-T1: write this docstring yourself - it is the prompt the model reads to decide WHEN to call this tool.
-    Say what the tool checks, and when to use it (and when not to).
+    """Check if an order can be returned under Northwind Store's return policy. Use when a customer asks whether
+    they can return an item, or wants to initiate a return for a delivered order. Do NOT use it for general return
+    policy questions.
 
     Args:
-        order_id: TODO - describe it (format, e.g. ORD-10231)
-        reason: TODO - describe it, and list the allowed values (see REASONS above)
+        order_id: the order number in ORD-12345 format, e.g. ORD-10231
+        reason: customer's reason for return ('wrong_size', 'changed_mind', 'damaged', 'defective', 'wrong_item', 'not_as_described')
     """
-    # TODO MP1-T1: Northwind Store's return rules, in this order:
-    #   o = _find(order_id)
-    #   1. not delivered yet (status != "delivered")      -> {"eligible": False, "why": "not delivered yet ..."}
-    #   2. o["category"] in NON_RETURNABLE                 -> {"eligible": False, "why": "<category> is non-returnable"}
-    #   3. window = DAMAGED_WINDOW_DAYS if reason in {"damaged", "defective", "wrong_item"} else RETURN_WINDOW_DAYS
-    #      days = (TODAY - date.fromisoformat(o["delivered_on"])).days
-    #      days > window                                    -> {"eligible": False, "why": f"delivered {days} days ago; window is {window} days"}
-    #   4. otherwise -> {"eligible": True, "days_since_delivery": days, "window_days": window,
-    #                    "refund_rupees": o["price"], "how": "start the return on the website: My Orders > Return"}
-    # TODO MP1-T2: raise ValueError if reason is not one of REASONS (say which values are allowed).
-    raise NotImplementedError("TODO MP1-T1")
+    if reason not in REASONS:
+        raise ValueError(f"reason must be one of {sorted(REASONS)}, got {reason!r}")
+    o = _find(order_id)
+    if o.get("status") != "delivered":
+        return {"eligible": False, "why": f"not delivered yet (status is {o.get('status')})"}
+    if o.get("category") in NON_RETURNABLE:
+        return {"eligible": False, "why": f"{o['category']} is non-returnable"}
+    window = DAMAGED_WINDOW_DAYS if reason in {"damaged", "defective", "wrong_item"} else RETURN_WINDOW_DAYS
+    days = (TODAY - date.fromisoformat(o["delivered_on"])).days
+    if days > window:
+        return {"eligible": False, "why": f"delivered {days} days ago; window is {window} days"}
+    return {
+        "eligible": True,
+        "days_since_delivery": days,
+        "window_days": window,
+        "refund_rupees": o["price"],
+        "how": "start the return on the website: My Orders > Return",
+    }
 
 
 TOOLS = {"get_order_status": get_order_status, "get_delivery_estimate": get_delivery_estimate,
